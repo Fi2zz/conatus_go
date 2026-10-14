@@ -10,9 +10,15 @@
 「时空可组合性」编程范式的实现，同时是一个通用 Agent 框架；本仓的目标是把同一套
 语义与同一套验证强度搬到 Go。
 
-当前状态：**只有 `core` 包**（T0 spike，对应 Dart 的 `conatus_core`）：
-可逆效应（`EffectScope`）、反应式共效应（`Reactor`）、统一上下文（`Context`）、
-凭据脱敏。T1（foundation / llm / agent 等）未开始。
+当前进度（T1 分 15 个里程碑推进，见设计文档 §四）：
+
+| 里程碑 | 状态 |
+|--------|------|
+| M0 验证基建泛化 | ✅ |
+| M1a foundation 小件：`home` / `logging` / `timer` | ✅ |
+| M1a 其余小件：`loader` / `ask` | ⬜ 下一轮 |
+| M1b 工具系统（`foundation/tools`） | ✅ |
+| M1c 起（session / prompt / llm / agent / store / fs / shell / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
 
@@ -24,6 +30,16 @@
 - **上下文树**：服务沿父链向下可见，子级服务对父级不可见；父级释放级联释放子树。
   `Reactor` 用「脏标记 + 重跑」把连锁反应在一次 `Notify` 内收敛，不收敛（循环依赖）
   返回 `ErrNotConverged` 快速失败，绝不静默死循环。
+
+工具系统的三条不变式（改 `foundation/tools` 前必读）：
+
+- 面向模型只暴露白名单投影（`name` / `description` / `parameters`），宿主字段
+  （风险等级、分组、超时、路径参数、执行体）**永不下发**。
+- 未知工具 / 参数不合法 / 守卫拒绝 / 超时 / 执行体失败一律收敛为**失败结果**，
+  `Registry.Call` 不返回 error。
+- **超时只包住工具体**，不套住中间件——审批之类的中间件在等用户（可达数分钟）。
+  混在一处计时时小的那个静默获胜：用户批准后工具照样执行，但模型已被告知失败，
+  写操作会变成「以为失败而重试，实际写了两遍」。
 
 ## 2. 仓库结构
 
@@ -37,94 +53,126 @@
 │   ├── context.go            Context / NewRoot / Plugin / 生命周期 / 错误接收器
 │   ├── inject.go             Inject（共效应状态机）
 │   ├── redaction.go          IsSensitiveKey / MaskSecret / RedactSecrets
-│   ├── errors.go             全树共享的错误接收器
-│   └── *_test.go             单元 + 对等可逆性验证（外部测试包 core_test）
+│   └── errors.go             全树共享的错误接收器
+├── foundation/
+│   ├── home/                 用户目录解析 / UUID v4 / 落盘权限收紧
+│   ├── logging/              分级日志服务 + 控制台导出器 + Provide
+│   ├── timer/                可逆定时器：Timeout / Interval / Sleep / Throttle / Debounce
+│   └── tools/                工具系统：ParamSpec→JSON Schema / 校验 / 注册表 / 执行管线
 ├── tool/
-│   ├── verify_reversibility.sh   六层一键验证（fail-closed）
-│   └── mutate_reversibility.sh   7 个变异体注入 + 杀死判定（fail-closed）
-└── docs/specs/               设计文档（含映射结论、未覆盖分支清单）
+│   ├── lib.sh                六层验证的共用实现
+│   ├── verify_all.sh         全模块一键验证（可传路径前缀收窄）
+│   ├── verify_reversibility.sh  core 专项入口（= verify_all.sh core）
+│   ├── mutants.txt           变异体清单（域|标签|目标文件|原文|替换）
+│   └── mutate.sh             变异测试执行器（fail-closed，兼容 macOS bash 3.2）
+└── docs/specs/               设计文档（含 T1 定论、映射结论、未覆盖分支清单）
 ```
 
 ## 3. 技术栈与依赖约束
 
-- Go 1.22 起（用到泛型与 `atomic.Bool`/`atomic.Uint64`）。
+- Go 1.23 起（用到泛型、`atomic.Bool`/`atomic.Uint64`、为 `iter.Seq2` 预留）。
 - **零第三方依赖**：只用标准库。新增依赖需先确认真的必要——这是 Dart 版
-  `conatus_core` 的卖点，Go 版沿用。
+  `conatus_core` 的卖点，Go 版沿用（T1 的 YAML frontmatter 与文件监听也走自写/降级
+  方案，见设计文档 D-T1-8）。
 - 测试不用断言库，只用标准库 `testing`（对齐 Dart 侧「不用 mock 框架、用手写替身」）。
+- tool 脚本必须兼容 **macOS 自带的 bash 3.2**：不用数组、不用 `mapfile`。
 
 ## 4. 常用命令
 
 ```bash
 go build ./... && go vet ./...            # 构建与静态检查
 gofmt -l .                                # 格式检查（输出非空即失败）
-go test ./... -count=1                    # 单元测试
-go test ./... -count=1 -race              # 竞态检测
-go test ./... -count=1 -shuffle=42        # 随机顺序
-bash tool/verify_reversibility.sh         # 六层一键验证（提交前必须通过）
-bash tool/mutate_reversibility.sh         # 变异测试（改 core 后必须跑）
+go test ./... -count=1 -race              # 单元测试 + 竞态检测
+bash tool/verify_all.sh                   # 全模块六层验证（提交前必须通过）
+bash tool/verify_all.sh foundation/tools  # 只验某块（覆盖率与变异同步收窄）
+bash tool/mutate.sh core                  # 只跑某域的变异体
 ```
 
-`go` 可能只装在 `/usr/local/go/bin` 未进 PATH；两个 tool 脚本会自己探测一次。
+`go` 可能只装在 `/usr/local/go/bin` 未进 PATH；脚本会自己探测一次。
 
 ## 5. 代码组织与风格
 
 - **一个文件一件事**：`services.go` 只放服务查找与登记、`inject.go` 只放共效应状态机、
-  `context.go` 只放生命周期与装配。`core/` 内公开 API 平铺（`core.Context` 等）。
-- **硬性约束**：单文件 ≤ 200 行、单函数 ≤ 40 行、函数参数 ≤ 4 个；单函数内
+  `pipeline.go` 只放执行管线。公开 API 平铺在各自包里（`core.Context`、`tools.Registry`）。
+- **一个插件一个 Go 包**：不照搬 Dart「一个包塞 42 个文件」——Go 的包是依赖单元，
+  未来 `session` 的使用者不该被迫拉进 `shell`。
+- **硬性约束**：实现文件 ≤ 200 行（**测试文件放宽到 ≤ 300 行**，用例密度优先，对齐
+  Dart 仓现状）、单函数 ≤ 40 行、函数参数 ≤ 4 个；单函数内
   `if / else / switch / case` ≤ 3、嵌套 ≤ 2、单个条件连续 `&& / ||` ≤ 2；优先 early return。
-  例外需加 `// REASON: ...`（现有例子：`applyEffect` 的六路映射表）。
+  例外需加 `// REASON: ...`（现有例子：`applyEffect` 六路映射表、`checkValue` 七类型表、
+  `asNumber` 数字归一表）。
 - **布尔命名不用 `is / has / can / should` 前缀**（用 `disposed` / `cancelled` /
   `active` / `activated` 这类状态词）；函数名「动词 + 名词」；禁止 `flag` / `temp` 弱命名。
 - **注释用中文**，解释「为什么」而不是「做什么」。面向用户的文案/错误信息用中文。
-- `Disposer` 是 `func() error`；无错清理用 `core.Ignore(func())` 适配，不要为了凑类型
-  吞掉错误。
+- **选项函数而非长参数表**：`NewRegistry(WithDefaultTimeout(d))`、
+  `StringParam("q", Required(), Describe("…"))`。同名选项在不同包里各自命名
+  （如 `WithFn*` / `WithConsole*` / `WithCallTimeout`）以避免包内冲突。
+- **重复出现的机制抽成可复用件**：`core.Ignore`（无错清理）、`tools.slotList[T]`
+  （登记→可移除）、`tools.optional` / `asInteger`（取值归一）。
 
 ## 6. Go 侧与 Dart 版的形态差异（改 API 前必读）
 
-这几条是移植的硬结论，不是风格偏好，T1 会继续沿用：
+这几条是移植的硬结论，不是风格偏好：
 
-1. **移除监听器只能靠句柄**：`Reactor.Add` 返回 `*ListenerHandle`，没有
-   `Remove(listener)`。Go 函数值不可比较，`reflect.Value.Pointer()` 无法区分同一
-   字面量的不同闭包——按码指针移除会误删别的 inject。
+1. **移除监听器只能靠句柄**：`Reactor.Add` 返回 `*ListenerHandle`；注册表、守卫、
+   中间件、监听器的撤销一律走句柄（`tools.slotList`），**绝不**用
+   `reflect.Value.Pointer()` 比函数——同一字面量的不同闭包会共享码指针，会误删别人。
 2. **失败走显式 error**：可预期失败（服务重复/不可用/类型不符、install 失败、广播
-   不收敛）返回 error；编程错误（`maxRounds <= 0`、nil 监听器、nil Disposer）panic。
-3. **服务查找的泛型入口是自由函数**：`core.Get[T](ctx, key)` / `core.Require[T](ctx, key)`
-   （Go 方法不能自带类型参数），底层是 `(*Context).Service(key) (any, bool)`。
+   不收敛、工具重名）返回 error；编程错误（`maxRounds <= 0`、nil 监听器、nil Disposer、
+   空枚举声明）panic。
+3. **泛型入口是自由函数**：`core.Get[T](ctx, key)` / `core.Require[T](ctx, key)`、
+   `tools.Get[T](tc, name)` / `tools.Require[T](tc, name)`——Go 方法不能自带类型参数。
+   Dart 的 `ctx.tools` 这类扩展方法对应 `tools.From(ctx)`。
 4. **所有类型并发安全**，且 **绝不持锁调用外部代码**（撤销函数、监听器、inject 回调、
-   install）。回调里重入 `Track` / `Notify` / `Dispose` 必须不死锁。
-5. **错误接收器显式化**：inject 回调的错误在广播期间产生、无法同步冒泡，交给
+   守卫、中间件、工具执行体、日志导出器）。回调里重入登记/撤销/调用必须不死锁。
+5. **错误接收器显式化**：inject 回调与释放路径的错误无法同步冒泡，交给
    `SetErrorHandler`（默认写 stderr）；接收器由 root 持有、全树共享。
 6. **不再有运行时类型分派**：Dart 的 `capture<T>` 拆成 `Capture`（登记返回值）与
-   `Run`（不登记）两个显式方法。
+   `Run`（不登记）；工具元数据用「最小接口 + 可选接口」（`RiskOf` / `TimeoutOf` /
+   `PathParamsOf` / `ParamsOf` / `GroupOf`），简单工具只写三个方法。
+7. **数字取值放宽**：Dart 的 `jsonDecode` 保留 int/double 之分（所以那边
+   `value is int` 成立），Go 的 `encoding/json` 只有 float64。因此 `Integer` /
+   `ParamInteger` 接受「任何整数值的数字」（含 `json.Number`），见 `coerce.go`。
+8. **时间敏感件必须可注入时钟**（`WithClock` / `WithThrottleClock`），禁止裸
+   `time.Now()`——schedule / cron / autonomous 的确定性测试全靠它。
+9. **定时器与工具回调跑在独立 goroutine 上**：Dart 的单线程事件循环没有这个差异，
+   Go 侧对照测试里共享的计数器必须用原子量，否则 `-race` 会（正确地）报竞争。
 
 ## 7. 测试策略
 
 | 层级 | 位置 | 关注点 |
 |------|------|--------|
-| 单元测试 | `core/*_test.go` | 单类型语义（服务、效应、收敛、共效应） |
+| 单元测试 | `core/*_test.go`、`foundation/*/*_test.go` | 单类型语义（服务、效应、收敛、共效应、日志、定时器、工具管线） |
 | 对等可逆性验证 | `core/reversibility_*_test.go` | 论文 Theorem 16 的逐前缀还原 oracle + 负向对照 + 元检查 |
 | 真资源探针 | `core/reversibility_{os_resources,goroutine}_test.go` | 真文件句柄（`lsof`）、goroutine 泄漏、真实 tick 停表 |
 
-- 测试一律用外部测试包 `core_test`，只经公开 API 验证行为。
+- 测试一律用外部测试包（`core_test` / `tools_test` …），只经公开 API 验证行为。
 - 验证夹具（`effectWorld` / `reversibilityHarness`）自己也要自检：三种失败模式
   （安慰剂逆 / 漏登记 / 半个逆）必须被构造成不同形态，且负向对照必须被检出。
-- **改 `core` 的效应或上下文机制后必须跑 `tool/verify_reversibility.sh`**，
-  尤其是变异测试——它是「测试是否真的在断言」的唯一证据。
-- 覆盖率仅作信息性输出；当前有 5 行并发防御分支未覆盖，原因见设计文档 §7。
+- **改机制后必须跑 `bash tool/verify_all.sh`**，尤其是变异测试——它是「测试是否真的
+  在断言」的唯一证据。新增实现请同步在 `tool/mutants.txt` 加条目（模式必须是单行、
+  在目标文件里唯一）。
+- 覆盖率仅作信息性输出（各文件 60%~100%），真正的闸门是变异测试。缺的通常是同类
+  分支的其它形态（如其它类型的取值函数）与防御分支。
 
 ## 8. 开发约定
 
 - 提交信息：Conventional Commits + 中文描述 + scope，例：
-  `feat(core): 新增 Inject 共效应状态机`、`fix(core): 修正 LIFO 撤销顺序`。
-  功能 / 修复 / 重构分开提交，不把「顺手优化」混进来。
+  `feat(foundation): 新增 home/logging/timer 三个基础子包`、
+  `fix(core): 修正 LIFO 撤销顺序`。功能 / 修复 / 重构分开提交，不把「顺手优化」混进来。
 - 收尾顺序：`gofmt -l .` 无输出 → `go vet ./...` → `go test ./... -count=1 -race`
-  → `bash tool/verify_reversibility.sh` 总判定通过 → 提交。
+  → `bash tool/verify_all.sh` 总判定通过 → 提交。
 - 不手动修改生成物（本仓暂无生成物）。`.handoffs/`（若存在）用于跨轮次交接。
 
 ## 9. 已知边界
 
-- 只有 `core`：任何 T1 的包都**尚未实现**，本文档不写未定论的推测。
-- `Provide` 的非收敛错误返回目前不可达（public API 挂不上任意监听器），保留为防御。
+- **已落地**：`core` + `foundation/{home,logging,timer,tools}`。其余 T1 组件
+  （session / prompt / llm / agent / store / fs / shell / loader / ask / …）**尚未实现**，
+  本文档不写未定论的推测。
+- `core.Provide` 的非收敛错误返回目前不可达（public API 挂不上任意监听器），保留为防御；
+  同理 `tools` 里「撤销时按槽位指针比对」的分支在单线程用例下不可达（并发交错下才走到）。
+- 工具超时的语义是「丢弃迟到结果」而非取消：无视 ctx 的工具会继续在后台跑完，
+  结果被丢弃（缓冲通道保证 goroutine 不泄漏）——与 Dart 的 `Future.timeout` 一致。
 - `lsof` 不存在时 OS 级 FD 用例自动跳过（fail-open 仅在「工具缺失」这一种情况，
   其余一律 fail-closed）。
-- 未接 CI；提交前靠本地 `tool/verify_reversibility.sh` 把关。
+- 未接 CI；提交前靠本地 `tool/verify_all.sh` 把关。
