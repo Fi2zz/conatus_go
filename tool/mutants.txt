@@ -1,0 +1,15 @@
+# 变异体清单：域|标签|目标文件|原文|替换
+#
+# 规则（由 tool/mutate.sh 强制，fail-closed）：
+#   * 原文必须是**单行**，并且在目标文件里出现次数恰好为 1（否则硬失败）
+#   * 替换后必须能通过 `go vet ./...`（编译不过 = 硬失败）
+#   * 每个变异体都必须让 `go test ./... -count=1` 失败（存活 = 验证有盲区）
+#
+# 域用于分片运行，例：`bash tool/mutate.sh core` 只跑 core 域的变异体。
+core|LIFO 改成 FIFO|core/effect_scope.go|last := len(s.disposers) - 1|last := 0
+core|迟到登记不再立即执行|core/effect_scope.go|if s.disposed {|if !s.disposed {
+core|撤销错误被静默吞掉|core/effect_scope.go|errs = append(errs, err)|_ = err
+core|Capture 不再登记 Disposer|core/effect_scope.go|s.Track(d)|_ = d
+core|inject 不登记取消（调用点）|core/inject.go|c.Track(injection.cancel)|_ = injection.cancel
+core|[元] 夹具不再构造漏登记|core/reversibility_harness_test.go|if !registersInverse(spec.mode) {|if registersInverse(spec.mode) {
+core|[元] 投影不再观察定时器|core/reversibility_world_test.go|w.activeTimers()|0

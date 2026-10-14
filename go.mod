@@ -1,3 +1,3 @@
 module github.com/Fi2zz/conatus_go
 
-go 1.22
+go 1.23
