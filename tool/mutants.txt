@@ -13,3 +13,11 @@ core|Capture 不再登记 Disposer|core/effect_scope.go|s.Track(d)|_ = d
 core|inject 不登记取消（调用点）|core/inject.go|c.Track(injection.cancel)|_ = injection.cancel
 core|[元] 夹具不再构造漏登记|core/reversibility_harness_test.go|if !registersInverse(spec.mode) {|if registersInverse(spec.mode) {
 core|[元] 投影不再观察定时器|core/reversibility_world_test.go|w.activeTimers()|0
+foundation/tools|中间件顺序反转（先登记的变成最内层）|foundation/tools/pipeline.go|for index := len(middlewares) - 1; index >= 0; index-- {|for index := 0; index < len(middlewares); index++ {
+foundation/tools|工具超时被整体忽略|foundation/tools/pipeline.go|if timeout <= 0 {|if true {
+foundation/tools|参数校验被跳过|foundation/tools/validation.go|violations = append(violations, issue)|_ = issue
+foundation/tools|守卫拒绝被忽略|foundation/tools/pipeline.go|if denial := r.runGuards(call); denial != "" {|if denial := r.runGuards(call); denial == "" {
+foundation/tools|未知工具不再返回失败|foundation/tools/pipeline.go|if !found {|if found {
+foundation/tools|schema 泄露宿主字段|foundation/tools/tool.go|"parameters":  ParameterSchema(ParamsOf(tool)),|"parameters": ParameterSchema(ParamsOf(tool)), "riskLevel": "low",
+foundation/tools|管线复制无视 excludeTags|foundation/tools/register.go|if entry.tag != "" && containsTag(excludeTags, entry.tag) {|if entry.tag != "" && !containsTag(excludeTags, entry.tag) {
+foundation/tools|撤销不按槽位指针比对|foundation/tools/register.go|if r.slots[name] != handle {|if r.slots[name] == handle {
