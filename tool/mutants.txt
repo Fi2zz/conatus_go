@@ -45,3 +45,7 @@ llm|事件不再透传给宿主|llm/provider.go|		if settings.observer != nil {|
 llm|错误分类忽略显式标注|llm/errors.go|	if e.Kind == KindUnset {|	if false {
 llm|5xx 不再算服务端错误|llm/errors.go|	case statusCode >= 500:|	case statusCode >= 5000:
 llm|错误一律不可重试|llm/errors.go|func (e *Error) Retryable() bool { return e.ErrorKind().Retryable() }|func (e *Error) Retryable() bool { return false }
+llm|退避不再按 2 的幂翻倍|llm/retry_policy.go|		shift = attempt - 1|		shift = 0
+llm|退避不再封顶|llm/retry_policy.go|	if delay > p.MaxDelay {|	if false {
+llm|服务端 Retry-After 被忽略|llm/retry_policy.go|	if settings.retryAfter > 0 {|	if false {
+llm|缺省抖动偏移到下限|llm/retry_policy.go|	unit := 0.5|	unit := 0.0
