@@ -33,3 +33,9 @@ foundation/loader|重复 id 不再报错|foundation/loader/tree.go|if _, taken :
 foundation/loader|自动 id 不带父前缀|foundation/loader/tree.go|return parent + ":" + id|return id
 foundation/loader|children 形状退回 []map（往返断裂）|foundation/loader/entry.go|children := make([]any, 0, len(e.Children))|children := make([]map[string]any, 0, len(e.Children))
 foundation/ask|provide 不把 Cancel 挂到释放路径|foundation/ask/provide.go|ctx.OnDispose(core.Ignore(instance.Cancel))|_ = instance.Cancel
+foundation/prompt|段排序忽略 order（只看名字）|foundation/prompt/registry.go|	if orderA != orderB {|	if false {
+foundation/prompt|未知占位符被删空|foundation/prompt/render.go|			return match|			return ""
+foundation/prompt|空上下文仍贡献分隔符|foundation/prompt/render.go|		if text == "" {|		if false {
+foundation/prompt|时间锚点不再靠前|foundation/prompt/time_anchor.go|	TimeContextOrder = -10|	TimeContextOrder = 10
+foundation/prompt|星期换算错位（周日当周一）|foundation/prompt/time_anchor.go|	return weekdayNames[(int(now.Weekday())+6)%7]|	return weekdayNames[int(now.Weekday())%7]
+foundation/prompt|Add 不再生成缺省段名|foundation/prompt/registry.go|	if name == "" {|	if false {

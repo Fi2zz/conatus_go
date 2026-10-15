@@ -20,7 +20,8 @@ conatus 的 **Go 实现**——「时空可组合性（Spatiotemporal Composabil
 | `foundation/tools` 工具系统（ParamSpec→JSON Schema / 校验 / 注册表 / 执行管线） | ✅ |
 | `foundation/session` 事件日志（快照读 / 同步落盘 JSONL / fork 后缀语义） | ✅ |
 | `foundation/loader` 插件装载 + `foundation/ask` 提问服务 | ✅ |
-| `foundation/{prompt,store,fs,shell,sessionlog}` | ⬜ |
+| `foundation/prompt` system prompt 段装配 + 日粒度时间锚点 | ✅ |
+| `foundation/{store,fs,shell,sessionlog}` | ⬜ |
 | `llm` / `compaction` / `agent` / `tasks` / `skill` / `search` / `credentials` / `schedule` | ⬜ |
 
 分档与估算见 `Go版本移植工作量调研.md`，T1 的 15 个里程碑与架构定论见
