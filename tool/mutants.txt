@@ -27,3 +27,9 @@ foundation/session|追加不通知监听器|foundation/session/session.go|sink.f
 foundation/session|fork 不记继承条数（ownEvents 失真）|foundation/session/fork.go|return New(id, WithSeed(seed), WithInheritedEventCount(len(seed)))|return New(id, WithSeed(seed))
 foundation/session|adopt 不落盘继承历史|foundation/session/store.go|s.persistSeed(persistence, id, session.Events())|_ = persistence
 foundation/session|落盘权限不再补收紧|foundation/session/jsonl.go|if info.Mode().Perm() == 0o600 {|if info.Mode().Perm() != 0o600 {
+foundation/loader|级联卸载顺序反转（后代先于祖先失效）|foundation/loader/detach.go|for index := len(handles) - 1; index >= 0; index-- {|for index := 0; index < len(handles); index++ {
+foundation/loader|加载失败不摘除占位|foundation/loader/tree.go|l.drop(id)|_ = id
+foundation/loader|重复 id 不再报错|foundation/loader/tree.go|if _, taken := l.entries[id]; taken {|if _, taken := l.entries[id]; !taken {
+foundation/loader|自动 id 不带父前缀|foundation/loader/tree.go|return parent + ":" + id|return id
+foundation/loader|children 形状退回 []map（往返断裂）|foundation/loader/entry.go|children := make([]any, 0, len(e.Children))|children := make([]map[string]any, 0, len(e.Children))
+foundation/ask|provide 不把 Cancel 挂到释放路径|foundation/ask/provide.go|ctx.OnDispose(core.Ignore(instance.Cancel))|_ = instance.Cancel

@@ -18,7 +18,7 @@
 | M1a foundation 小件：`home` / `logging` / `timer` | ✅ |
 | M1b 工具系统（`foundation/tools`） | ✅ |
 | M1c 会话事件日志（`foundation/session`） | ✅ |
-| M1a 其余小件：`loader` / `ask` | ⬜ 进行中 |
+| M1a 其余小件：`loader` / `ask` | ✅ |
 | M1d 起（prompt / llm / agent / store / fs / shell / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
@@ -167,8 +167,8 @@ bash tool/mutate.sh core                  # 只跑某域的变异体
 
 ## 9. 已知边界
 
-- **已落地**：`core` + `foundation/{home,logging,timer,tools}`。其余 T1 组件
-  （session / prompt / llm / agent / store / fs / shell / loader / ask / …）**尚未实现**，
+- **已落地**：`core` + `foundation/{home,logging,timer,tools,session,loader,ask}`。其余 T1
+  组件（prompt / llm / agent / store / fs / shell / sessionlog / …）**尚未实现**，
   本文档不写未定论的推测。
 - `core.Provide` 的非收敛错误返回目前不可达（public API 挂不上任意监听器），保留为防御；
   同理 `tools` 里「撤销时按槽位指针比对」的分支在单线程用例下不可达（并发交错下才走到）。
