@@ -21,3 +21,9 @@ foundation/tools|未知工具不再返回失败|foundation/tools/pipeline.go|if 
 foundation/tools|schema 泄露宿主字段|foundation/tools/tool.go|"parameters":  ParameterSchema(ParamsOf(tool)),|"parameters": ParameterSchema(ParamsOf(tool)), "riskLevel": "low",
 foundation/tools|管线复制无视 excludeTags|foundation/tools/register.go|if entry.tag != "" && containsTag(excludeTags, entry.tag) {|if entry.tag != "" && !containsTag(excludeTags, entry.tag) {
 foundation/tools|撤销不按槽位指针比对|foundation/tools/register.go|if r.slots[name] != handle {|if r.slots[name] == handle {
+foundation/session|关闭不再幂等（重复触发关闭回调）|foundation/session/listeners.go|if !s.closedFlag.CompareAndSwap(false, true) {|if s.closedFlag.CompareAndSwap(false, true) {
+foundation/session|追加不再递增 seq|foundation/session/session.go|event := NewEvent(s.id, eventType, s.seq, opts...)|event := NewEvent(s.id, eventType, 0, opts...)
+foundation/session|追加不通知监听器|foundation/session/session.go|sink.fn(event)|_ = sink
+foundation/session|fork 不记继承条数（ownEvents 失真）|foundation/session/fork.go|return New(id, WithSeed(seed), WithInheritedEventCount(len(seed)))|return New(id, WithSeed(seed))
+foundation/session|adopt 不落盘继承历史|foundation/session/store.go|s.persistSeed(persistence, id, session.Events())|_ = persistence
+foundation/session|落盘权限不再补收紧|foundation/session/jsonl.go|if info.Mode().Perm() == 0o600 {|if info.Mode().Perm() != 0o600 {

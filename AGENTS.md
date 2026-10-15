@@ -16,9 +16,10 @@
 |--------|------|
 | M0 验证基建泛化 | ✅ |
 | M1a foundation 小件：`home` / `logging` / `timer` | ✅ |
-| M1a 其余小件：`loader` / `ask` | ⬜ 下一轮 |
 | M1b 工具系统（`foundation/tools`） | ✅ |
-| M1c 起（session / prompt / llm / agent / store / fs / shell / …） | ⬜ 未开始 |
+| M1c 会话事件日志（`foundation/session`） | ✅ |
+| M1a 其余小件：`loader` / `ask` | ⬜ 进行中 |
+| M1d 起（prompt / llm / agent / store / fs / shell / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
 
