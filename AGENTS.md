@@ -20,7 +20,10 @@
 | M1c 会话事件日志（`foundation/session`） | ✅ |
 | M1a 其余小件：`loader` / `ask` | ✅ |
 | M1d system prompt 与时间锚点（`foundation/prompt`） | ✅ |
-| M2 起（llm / agent / store / fs / shell / sessionlog / …） | ⬜ 未开始 |
+| M2 `llm`：类型层 / 契约 / 失败分类 / 服务装配 / 退避策略 | ✅ |
+| M2 `llm`：OpenAI 兼容 wire 层（chat + responses 双形态，SSE 解析为纯函数） | ✅ |
+| M2 `llm`：`RetryingLlm` / `FallbackLlm` 两个装饰器 | ⬜ |
+| M2 其余（agent / store / fs / shell / sessionlog / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
 
@@ -60,7 +63,25 @@
 │   ├── home/                 用户目录解析 / UUID v4 / 落盘权限收紧
 │   ├── logging/              分级日志服务 + 控制台导出器 + Provide
 │   ├── timer/                可逆定时器：Timeout / Interval / Sleep / Throttle / Debounce
-│   └── tools/                工具系统：ParamSpec→JSON Schema / 校验 / 注册表 / 执行管线
+│   ├── tools/                工具系统：ParamSpec→JSON Schema / 校验 / 注册表 / 执行管线
+│   ├── session/              会话事件日志：append-only / fork / JSONL 同步落盘
+│   ├── loader/               插件装载器（层级 id / 级联卸载）
+│   ├── ask/                  提问服务（等待用户回答，可撤销）
+│   └── prompt/               system prompt 段装配 + 日粒度时间锚点
+├── llm/                      统一的大模型接入层（= Dart 的 conatus_llm）
+│   ├── types.go              消息 / 工具调用 / 图片 / 结果 / 流式事件（+ JSON 投影）
+│   ├── provider.go           Provider 契约 + Option + StreamChatResult 累积器
+│   ├── errors.go             Error / ErrorKind（状态码推断 + 可重试判定）
+│   ├── retry_policy.go       退避策略（次数 / 上限 / 抖动 / 服务端 Retry-After）
+│   ├── openai.go             OpenAI 兼容 provider（选项 / 端点 / 生命周期）
+│   ├── openai_http.go        请求构造、状态码错误、错误正文提取
+│   ├── openai_stream.go      流式驱动（拉帧 → 产出事件 → 终态）
+│   ├── sse.go                SSE 逐行解析（纯函数：吃 io.Reader，可脱离网络单测）
+│   ├── stream_frame.go       两种形态的帧 → 事件
+│   ├── stream_accum.go       工具调用分片累积（保序）
+│   ├── request_body.go       两种形态的请求体与工具 schema 投影
+│   ├── retryafter.go         `Retry-After` 解析（HTTP-date 走可注入时钟）
+│   └── json.go               JSON 取值归一
 ├── tool/
 │   ├── lib.sh                六层验证的共用实现
 │   ├── verify_all.sh         全模块一键验证（可传路径前缀收窄）
@@ -168,9 +189,16 @@ bash tool/mutate.sh core                  # 只跑某域的变异体
 
 ## 9. 已知边界
 
-- **已落地**：`core` + `foundation/{home,logging,timer,tools,session,loader,ask,prompt}`。
-  其余 T1 组件（llm / agent / store / fs / shell / sessionlog / …）**尚未实现**，
+- **已落地**：`core` + `foundation/{home,logging,timer,tools,session,loader,ask,prompt}`
+  + `llm`（类型 / 契约 / 失败分类 / 退避策略 / OpenAI 兼容 wire 层）。
+  其余 T1 组件（agent / store / fs / shell / sessionlog / …）**尚未实现**，
   本文档不写未定论的推测。
+- `llm` 已能发真实请求（chat 与 responses 两种形态）；但 **`RetryingLlm` / `FallbackLlm`
+  两个装饰器、凭据服务（构造期解析 + 运行期轮换）尚未落地**——provider 显式收 `apiKey`，
+  不读环境变量（与 Dart 同语义）。
+- `llm.OpenAI` 的超时只落在**自建**客户端上（`ResponseHeaderTimeout`，只包住等响应头阶段）；
+  注入 `WithHTTPClient` 后 `WithTimeout` 不生效——Go 没有「只限响应头」的 client 级开关，
+  本包也不去改调用方给的客户端。
 - `core.Provide` 的非收敛错误返回目前不可达（public API 挂不上任意监听器），保留为防御；
   同理 `tools` 里「撤销时按槽位指针比对」的分支在单线程用例下不可达（并发交错下才走到）。
 - 工具超时的语义是「丢弃迟到结果」而非取消：无视 ctx 的工具会继续在后台跑完，
