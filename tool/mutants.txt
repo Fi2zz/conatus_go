@@ -49,3 +49,19 @@ llm|退避不再按 2 的幂翻倍|llm/retry_policy.go|		shift = attempt - 1|		s
 llm|退避不再封顶|llm/retry_policy.go|	if delay > p.MaxDelay {|	if false {
 llm|服务端 Retry-After 被忽略|llm/retry_policy.go|	if settings.retryAfter > 0 {|	if false {
 llm|缺省抖动偏移到下限|llm/retry_policy.go|	unit := 0.5|	unit := 0.0
+llm|SSE 空行不再收尾那一帧|llm/sse.go|	if trimmed == "" {|	if trimmed != "" {
+llm|SSE 不再 [DONE] 截断|llm/sse.go|	if payload == sseDoneMarker {|	if payload != sseDoneMarker {
+llm|多行 data 不以换行拼接|llm/sse.go|	payload := strings.TrimRightFunc(strings.Join(b.lines, "\n"), unicode.IsSpace)|	payload := strings.TrimRightFunc(strings.Join(b.lines, ""), unicode.IsSpace)
+llm|收尾时把已攒内容丢掉|llm/sse.go|	if len(b.lines) == 0 {|	if len(b.lines) != 0 {
+llm|工具参数分片被丢弃|llm/stream_accum.go|	if text != "" {|	if text == "" {
+llm|arguments.done 覆盖失效|llm/stream_accum.go|	b.arguments.Reset()|	_ = complete
+llm|无名占位项不再过滤|llm/stream_accum.go|	if b.name == "" {|	if b.name != "" {
+llm|输出项不再复用累积器|llm/stream_accum.go|	if index, found := s.responseIndex[itemID]; found {|	if index, found := s.responseIndex[itemID]; !found {
+llm|缺 index 不追加在末尾|llm/stream_frame.go|		index = len(s.chatCalls)|		index = 0
+llm|finish_reason 无条件覆盖|llm/stream_frame.go|	if reason, ok := choice["finish_reason"].(string); ok {|	if reason, ok := choice["finish_reason"].(string); !ok {
+llm|chat 用量不再更新|llm/stream_frame.go|	if usage, ok := objectOf(frame["usage"]); ok {|	if usage, ok := objectOf(frame["usage"]); !ok {
+llm|response.failed 不再报错|llm/stream_frame.go|		return nil, failedStreamError(p.name, frame)|		return nil, nil
+llm|responses 不再 store=false|llm/request_body.go|		body["store"] = false|		body["store"] = true
+llm|缺 API Key 检查失效|llm/openai.go|	if p.apiKey != "" {|	if p.apiKey == "" {
+llm|鉴权头丢掉 Bearer 前缀|llm/openai_http.go|	request.Header.Set("Authorization", "Bearer "+p.apiKey)|	request.Header.Set("Authorization", p.apiKey)
+llm|指向过去的 Retry-After 照收|llm/retryafter.go|	if delta < 0 {|	if delta >= 0 {
