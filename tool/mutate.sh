@@ -74,6 +74,14 @@ while IFS='|' read -r domain label file old new; do
   fi
   total=$((total + 1))
 
+  case "$new" in
+    *'|'*)
+      printf '%-22s %-30s %s\n' "$domain" "$label" "硬失败：字段数不对（原文或替换里混进了分隔符 |）"
+      hard_failed=$((hard_failed + 1))
+      continue
+      ;;
+  esac
+
   occurrences="$(grep -F -c -- "$old" "$file")"
   if [ "$occurrences" != "1" ]; then
     printf '%-22s %-30s %s\n' "$domain" "$label" "硬失败：模式出现 $occurrences 次（应为 1）"
