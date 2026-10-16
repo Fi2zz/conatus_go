@@ -2,6 +2,8 @@
 #
 # 规则（由 tool/mutate.sh 强制，fail-closed）：
 #   * 原文必须是**单行**，并且在目标文件里出现次数恰好为 1（否则硬失败）
+#   * 原文里不能出现 `|`：分隔符会把它切碎、字段数变多（这类条目被判硬失败）；
+#     替换里同理——虽然解析上能容，但别依赖「最后一个字段吞掉多余分隔符」这点
 #   * 替换后必须能通过 `go vet ./...`（编译不过 = 硬失败）
 #   * 每个变异体都必须让 `go test ./... -count=1` 失败（存活 = 验证有盲区）
 #
@@ -65,3 +67,14 @@ llm|responses 不再 store=false|llm/request_body.go|		body["store"] = false|		b
 llm|缺 API Key 检查失效|llm/openai.go|	if p.apiKey != "" {|	if p.apiKey == "" {
 llm|鉴权头丢掉 Bearer 前缀|llm/openai_http.go|	request.Header.Set("Authorization", "Bearer "+p.apiKey)|	request.Header.Set("Authorization", p.apiKey)
 llm|指向过去的 Retry-After 照收|llm/retryafter.go|	if delta < 0 {|	if delta >= 0 {
+llm|不值得重试的错误也重试|llm/retry.go|	return attempt < r.policy.MaxAttempts && IsRetryableError(err)|	return attempt < r.policy.MaxAttempts && err != nil
+llm|退避不随尝试次数增长|llm/retry.go|	delay := r.policy.DelayFor(attempt, WithRetryAfter(RetryAfterOf(cause)), WithRetryRandom(r.jitter))|	delay := r.policy.DelayFor(1, WithRetryAfter(RetryAfterOf(cause)), WithRetryRandom(r.jitter))
+llm|服务端 Retry-After 不给装饰器|llm/retry.go|	delay := r.policy.DelayFor(attempt, WithRetryAfter(RetryAfterOf(cause)), WithRetryRandom(r.jitter))|	delay := r.policy.DelayFor(attempt, WithRetryRandom(r.jitter))
+llm|重试通报的序号错一位|llm/retry.go|			Attempt:     attempt + 1,|			Attempt:     attempt,
+llm|已产出增量也重试|llm/retry.go|	return !emitted && r.worthAnother(attempt, err)|	return r.worthAnother(attempt, err)
+llm|退避睡眠不理会 ctx 取消|llm/retry.go|		return ctx.Err()|		return nil
+llm|汇总错误不再逐个列出|llm/fallback.go|	return Result{}, allCandidatesFailed(failures)|	return Result{}, errors.New("所有提供商均失败")
+llm|回退通报目标写死第一个候选|llm/fallback.go|		ToProvider:   f.providers[index+1].Name(),|		ToProvider:   f.providers[0].Name(),
+llm|剩余候选数算错|llm/fallback.go|		Remaining:    len(f.providers) - index - 1,|		Remaining:    len(f.providers),
+llm|已产出增量也换提供商|llm/fallback.go|			if emitted {|			if !emitted {
+llm|重试摘要不看错误类别|llm/retry_policy.go|		reason = llmError.ErrorKind().Label()|		reason = KindNetwork.Label()

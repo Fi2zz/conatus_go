@@ -126,3 +126,35 @@ func StreamChatResult(
 		Reasoning: reasoning.String(),
 	}, nil
 }
+
+// streamRequest 是一次流式请求的输入（只被装饰器透传，不解读）。
+//
+// 收成一个结构是为了让 [pumpStream] 的参数不超过四个。
+type streamRequest struct {
+	messages []Message
+	options  []Option
+}
+
+// pumpStream 跑一次流式尝试：把事件转发给消费方。
+//
+// 返回「是否产出过事件」「消费方是否提前停止」与错误。装饰器（[Retrying] / [Fallback]）
+// 靠前者决定「还能不能重来或换一家」——已经交出去的增量收不回来；靠后者决定「是否直接
+// 收工」，因为消费方都停下了，再试也只是白花配额。
+func pumpStream(
+	ctx context.Context,
+	provider Provider,
+	request streamRequest,
+	yield func(StreamEvent, error) bool,
+) (bool, bool, error) {
+	emitted := false
+	for event, err := range provider.ChatStream(ctx, request.messages, request.options...) {
+		if err != nil {
+			return emitted, false, err
+		}
+		emitted = true
+		if !yield(event, nil) {
+			return emitted, true, nil
+		}
+	}
+	return emitted, false, nil
+}

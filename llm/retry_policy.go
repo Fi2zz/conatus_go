@@ -1,7 +1,10 @@
 package llm
 
 import (
+	"errors"
+	"fmt"
 	"math"
+	"strconv"
 	"time"
 )
 
@@ -147,3 +150,21 @@ type Attempt struct {
 
 // HonoredRetryAfter 返回本次等待是否照服务端说的（而非叠加抖动算出来的）。
 func (a Attempt) HonoredRetryAfter() bool { return RetryAfterOf(a.Err) > 0 }
+
+// Summary 返回一行中文摘要（如「doubao 触发限流，3.0s 后重试（2/4）」），供屏上直接显示。
+func (a Attempt) Summary() string {
+	var llmError *Error
+	reason := KindNetwork.Label()
+	if errors.As(a.Err, &llmError) {
+		reason = llmError.ErrorKind().Label()
+	}
+	return fmt.Sprintf(
+		"%s %s，%ss 后重试（%d/%d）",
+		a.Provider, reason, secondsText(a.Delay), a.Attempt, a.MaxAttempts,
+	)
+}
+
+// secondsText 按一位小数给出秒数（3.0 / 0.5），与 Dart 的 toStringAsFixed(1) 对齐。
+func secondsText(delay time.Duration) string {
+	return strconv.FormatFloat(delay.Seconds(), 'f', 1, 64)
+}
