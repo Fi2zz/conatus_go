@@ -78,3 +78,16 @@ llm|回退通报目标写死第一个候选|llm/fallback.go|		ToProvider:   f.pr
 llm|剩余候选数算错|llm/fallback.go|		Remaining:    len(f.providers) - index - 1,|		Remaining:    len(f.providers),
 llm|已产出增量也换提供商|llm/fallback.go|			if emitted {|			if !emitted {
 llm|重试摘要不看错误类别|llm/retry_policy.go|		reason = llmError.ErrorKind().Label()|		reason = KindNetwork.Label()
+agent|本轮用户消息不进消息序列|agent/loop.go|	return append(opening, llm.Message{Role: llm.RoleUser, Content: userInput, Images: images})|	return opening
+agent|零步数上限被放行|agent/loop.go|	if loop.maxSteps <= 0 {|	if loop.maxSteps < 0 {
+agent|工具结果事件当对话消息|agent/events.go|	if event.Type == session.EventToolResult {|	if event.Type != session.EventToolResult {
+agent|负载缺失也照常还原|agent/events.go|	if data == nil {|	if data != nil {
+agent|助手消息不还原工具调用|agent/events.go|			ToolCalls: ToolCallsFromJSON(data["toolCalls"]),|			ToolCalls: nil,
+agent|用户消息不还原图片|agent/events.go|			Images:  ImagesFromJSON(data["images"]),|			Images:  nil,
+agent|图片数据不落进事件|agent/events.go|			"base64Data": image.Base64Data,|			"base64Data": "",
+agent|步数上限多跑一步|agent/round.go|	for index := 0; index < r.loop.maxSteps; index++ {|	for index := 0; index <= r.loop.maxSteps; index++ {
+agent|收口只去空格不去其它空白|agent/round.go|		return strings.TrimSpace(result.Content), true, nil|		return strings.Trim(result.Content, " "), true, nil
+agent|有工具调用才算收口（判反）|agent/round.go|	if len(result.ToolCalls) == 0 {|	if len(result.ToolCalls) != 0 {
+agent|工具参数不解析|agent/round.go|		Arguments: ParseToolArguments(call.Arguments),|		Arguments: map[string]any{},
+agent|工具结果丢掉配对 id|agent/round.go|		ToolCallID: call.ID,|		ToolCallID: "",
+agent|空动态上下文也多拼一个空行|agent/system.go|	if contexts == "" {|	if contexts != "" {
