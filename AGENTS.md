@@ -23,7 +23,9 @@
 | M2 `llm`：类型层 / 契约 / 失败分类 / 服务装配 / 退避策略 | ✅ |
 | M2 `llm`：OpenAI 兼容 wire 层（chat + responses 双形态，SSE 解析为纯函数） | ✅ |
 | M2 `llm`：`Retrying` / `Fallback` 两个装饰器 | ✅ |
-| M2 其余（agent / store / fs / shell / sessionlog / …） | ⬜ 未开始 |
+| M3 `agent`：最小闭环（循环 + 事件派生 + 取消） | ✅ |
+| M3 `agent` 其余插件（compaction / memory / reflection / router / plan / goal / telemetry …） | ⬜ |
+| M2 其余（store / fs / shell / sessionlog / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
 
@@ -84,6 +86,14 @@
 │   ├── request_body.go       两种形态的请求体与工具 schema 投影
 │   ├── retryafter.go         `Retry-After` 解析（HTTP-date 走可注入时钟）
 │   └── json.go               JSON 取值归一
+├── agent/                     Agent 主循环（= Dart 的 conatus_agent，目前只有最小闭环）
+│   ├── types.go              包文档 + SteeringSource / Observer / TurnTracker / Step / Turn
+│   ├── loop.go               Loop 装配、Run、轮次钩子与事件写入
+│   ├── round.go              单轮状态机：步进 → 工具调用回填 → 收口
+│   ├── events.go             会话事件 ↔ 模型消息（历史不另存，全靠事件派生）
+│   ├── system.go             system 文本装配（prompt 段 + 动态上下文）
+│   ├── cancel.go             取消语义（ctx 原生取消 + ErrCancelled）
+│   └── provide.go            装配到上下文（服务键 `agentLoop`）
 ├── tool/
 │   ├── lib.sh                六层验证的共用实现
 │   ├── verify_all.sh         全模块一键验证（可传路径前缀收窄）
@@ -192,9 +202,17 @@ bash tool/mutate.sh core                  # 只跑某域的变异体
 ## 9. 已知边界
 
 - **已落地**：`core` + `foundation/{home,logging,timer,tools,session,loader,ask,prompt}`
-  + `llm`（类型 / 契约 / 失败分类 / 退避策略 / OpenAI 兼容 wire 层）。
-  其余 T1 组件（agent / store / fs / shell / sessionlog / …）**尚未实现**，
-  本文档不写未定论的推测。
+  + `llm`（类型 / 契约 / 失败分类 / 退避策略 / wire 层 / 重试与回退装饰器）
+  + `agent` 的**最小闭环**（循环 + 事件派生 + 取消 + 装配）。
+- `agent` 只做了最小闭环：Dart 侧的 compaction / memory / reflection / router / plan /
+  goal / telemetry / approval / sub-agent 都**还没落地**，因此 `Loop` 上没有它们的字段与
+  分支。别按「agent 已完成」续写。
+- 本轮修掉 Dart 侧一个会丢输入的坑（已写进 `Loop.openingMessages` 的注释）：Dart 那份的
+  messages 完全由事件日志派生，于是**没绑定会话（临时对话）时用户输入根本发不出去**
+  ——日志里就没有那条事件。Go 侧显式带上本轮用户消息，历史在写事件之前抄好，不会重复。
+- 取消语义与 Dart 不同：Dart 用 `AgentCancel` + `Completer` 竞速「停止等待」（Future 杀不掉）；
+  Go 的 ctx 会真正取消在途工作（HTTP 请求与工具执行体都拿得到它），所以循环只看 ctx，
+  统一返回 `agent.ErrCancelled`。代价：无视 ctx 的第三方工具会让这一轮多等一会。
 - `llm` 已完整可用（两种形态的 wire 层 + 重试装饰器 + 回退链）；只剩**凭据服务**
   （构造期解析 + 运行期轮换）未落地——provider 显式收 `apiKey`，不读环境变量（与 Dart 同语义）。
 - 重试与回退共守一条流式约束：**已经交出去的增量收不回来**，故只在「尚未产出任何事件」时

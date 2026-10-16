@@ -25,8 +25,10 @@ conatus 的 **Go 实现**——「时空可组合性（Spatiotemporal Composabil
 | `llm` OpenAI 兼容 wire 层（chat + responses 双形态，SSE 解析为纯函数） | ✅ |
 | `llm` `Retrying` 重试装饰器 + `Fallback` 回退链 | ✅ |
 | `llm` 凭据服务（构造期解析 + 运行期轮换） | ⬜ |
+| `agent` 最小闭环（主循环 + 会话事件派生 + 取消 + 装配） | ✅ |
+| `agent` 其余插件（compaction / memory / reflection / router / plan / goal / telemetry…） | ⬜ |
 | `foundation/{store,fs,shell,sessionlog}` | ⬜ |
-| `compaction` / `agent` / `tasks` / `skill` / `search` / `credentials` / `schedule` | ⬜ |
+| `compaction` / `tasks` / `skill` / `search` / `credentials` / `schedule` | ⬜ |
 
 分档与估算见 `Go版本移植工作量调研.md`，T1 的 15 个里程碑与架构定论见
 [`docs/specs/2026-10-14-conatus-core-go-design.md`](docs/specs/2026-10-14-conatus-core-go-design.md)。
@@ -69,7 +71,7 @@ app.Dispose()
 ```bash
 go test ./... -count=1 -race          # 单元 + 竞态
 bash tool/verify_all.sh               # 六层一键验证（提交前必须通过）
-bash tool/mutate.sh                   # 变异测试：70 个真 bug 必须全部被杀
+bash tool/mutate.sh                   # 变异测试：83 个真 bug 必须全部被杀
 ```
 
 `go` 若只装在 `/usr/local/go/bin` 未进 PATH，脚本会自己探测一次。
@@ -89,6 +91,8 @@ Go 侧另外加了 `-race`、goroutine 泄漏探针、真实 tick 停表与真�
   会让并行调用乱序（顺序对模型侧有语义），故改成「切片保序 + `map` 定位下标」。
 - **退避睡眠认 ctx**：Dart 的 `Future.delayed` 打断不了退避；Go 的 `Sleeper(ctx, delay)` 在取消
   时立刻返回——否则一次 30s 退避会把已经放弃的请求按在原地。
+- **取消只认 ctx**：Dart 的 `AgentCancel` 用 `Completer` 竞速「停止等待」（Future 杀不掉）；
+  Go 的 ctx 会真正取消在途请求（HTTP 与工具执行体都拿得到它），`agent.ErrCancelled` 是唯一判据。
 - 所有类型并发安全，且**绝不持锁调用外部代码**（回调里重入不会死锁）。
 
 完整决策表、映射结论与未覆盖分支清单见
