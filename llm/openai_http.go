@@ -40,7 +40,7 @@ func (p *OpenAI) newRequest(
 	messages []Message,
 	settings settings,
 ) (*http.Request, error) {
-	body, err := json.Marshal(buildStreamBody(p.style, p.model, messages, settings.tools, settings.values))
+	body, err := json.Marshal(buildStreamBody(p.style, p.model, messages, settings))
 	if err != nil {
 		return nil, &Error{Provider: p.name, Message: "请求体编码失败：" + err.Error(), Kind: KindConfig}
 	}

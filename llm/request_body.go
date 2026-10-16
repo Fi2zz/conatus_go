@@ -8,8 +8,7 @@ func buildStreamBody(
 	style APIStyle,
 	model string,
 	messages []Message,
-	tools []map[string]any,
-	options map[string]any,
+	settings settings,
 ) map[string]any {
 	body := map[string]any{"model": model, "stream": true}
 	if style == StyleResponses {
@@ -19,10 +18,10 @@ func buildStreamBody(
 		body["messages"] = messageList(messages)
 		body["stream_options"] = map[string]any{"include_usage": true}
 	}
-	if len(tools) > 0 {
-		body["tools"] = projectedTools(style, tools)
+	if len(settings.tools) > 0 {
+		body["tools"] = projectedTools(style, settings.tools)
 	}
-	mergeInto(body, options)
+	mergeInto(body, settings.values)
 	return body
 }
 
