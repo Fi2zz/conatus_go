@@ -23,7 +23,8 @@ conatus 的 **Go 实现**——「时空可组合性（Spatiotemporal Composabil
 | `foundation/prompt` system prompt 段装配 + 日粒度时间锚点 | ✅ |
 | `llm` 类型 / 契约 / 失败分类 / 退避策略 | ✅ |
 | `llm` OpenAI 兼容 wire 层（chat + responses 双形态，SSE 解析为纯函数） | ✅ |
-| `llm` 的 `RetryingLlm` / `FallbackLlm` 装饰器、凭据服务 | ⬜ |
+| `llm` `Retrying` 重试装饰器 + `Fallback` 回退链 | ✅ |
+| `llm` 凭据服务（构造期解析 + 运行期轮换） | ⬜ |
 | `foundation/{store,fs,shell,sessionlog}` | ⬜ |
 | `compaction` / `agent` / `tasks` / `skill` / `search` / `credentials` / `schedule` | ⬜ |
 
@@ -68,7 +69,7 @@ app.Dispose()
 ```bash
 go test ./... -count=1 -race          # 单元 + 竞态
 bash tool/verify_all.sh               # 六层一键验证（提交前必须通过）
-bash tool/mutate.sh                   # 变异测试：59 个真 bug 必须全部被杀
+bash tool/mutate.sh                   # 变异测试：70 个真 bug 必须全部被杀
 ```
 
 `go` 若只装在 `/usr/local/go/bin` 未进 PATH，脚本会自己探测一次。
@@ -86,6 +87,8 @@ Go 侧另外加了 `-race`、goroutine 泄漏探针、真实 tick 停表与真�
 - **工具超时只包住工具体**，不套住审批这类等用户的中间件。
 - **工具调用保序**：Dart 用插入有序的 `LinkedHashMap` 攒流式工具调用；Go 的 `map` 遍历无序
   会让并行调用乱序（顺序对模型侧有语义），故改成「切片保序 + `map` 定位下标」。
+- **退避睡眠认 ctx**：Dart 的 `Future.delayed` 打断不了退避；Go 的 `Sleeper(ctx, delay)` 在取消
+  时立刻返回——否则一次 30s 退避会把已经放弃的请求按在原地。
 - 所有类型并发安全，且**绝不持锁调用外部代码**（回调里重入不会死锁）。
 
 完整决策表、映射结论与未覆盖分支清单见

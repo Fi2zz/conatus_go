@@ -22,7 +22,7 @@
 | M1d system prompt 与时间锚点（`foundation/prompt`） | ✅ |
 | M2 `llm`：类型层 / 契约 / 失败分类 / 服务装配 / 退避策略 | ✅ |
 | M2 `llm`：OpenAI 兼容 wire 层（chat + responses 双形态，SSE 解析为纯函数） | ✅ |
-| M2 `llm`：`RetryingLlm` / `FallbackLlm` 两个装饰器 | ⬜ |
+| M2 `llm`：`Retrying` / `Fallback` 两个装饰器 | ✅ |
 | M2 其余（agent / store / fs / shell / sessionlog / …） | ⬜ 未开始 |
 
 三条硬保证（改动 `core` 前必须理解，且必须由测试钉住）：
@@ -70,9 +70,11 @@
 │   └── prompt/               system prompt 段装配 + 日粒度时间锚点
 ├── llm/                      统一的大模型接入层（= Dart 的 conatus_llm）
 │   ├── types.go              消息 / 工具调用 / 图片 / 结果 / 流式事件（+ JSON 投影）
-│   ├── provider.go           Provider 契约 + Option + StreamChatResult 累积器
+│   ├── provider.go           Provider 契约 + Option + StreamChatResult 累积器 + 流式泵
 │   ├── errors.go             Error / ErrorKind（状态码推断 + 可重试判定）
-│   ├── retry_policy.go       退避策略（次数 / 上限 / 抖动 / 服务端 Retry-After）
+│   ├── retry_policy.go       退避策略（次数 / 上限 / 抖动 / 服务端 Retry-After）+ Attempt
+│   ├── retry.go              Retrying 装饰器（退避与睡眠均可注入）
+│   ├── fallback.go           Fallback 回退链（换提供商 + 回退事件通报）
 │   ├── openai.go             OpenAI 兼容 provider（选项 / 端点 / 生命周期）
 │   ├── openai_http.go        请求构造、状态码错误、错误正文提取
 │   ├── openai_stream.go      流式驱动（拉帧 → 产出事件 → 终态）
@@ -193,9 +195,11 @@ bash tool/mutate.sh core                  # 只跑某域的变异体
   + `llm`（类型 / 契约 / 失败分类 / 退避策略 / OpenAI 兼容 wire 层）。
   其余 T1 组件（agent / store / fs / shell / sessionlog / …）**尚未实现**，
   本文档不写未定论的推测。
-- `llm` 已能发真实请求（chat 与 responses 两种形态）；但 **`RetryingLlm` / `FallbackLlm`
-  两个装饰器、凭据服务（构造期解析 + 运行期轮换）尚未落地**——provider 显式收 `apiKey`，
-  不读环境变量（与 Dart 同语义）。
+- `llm` 已完整可用（两种形态的 wire 层 + 重试装饰器 + 回退链）；只剩**凭据服务**
+  （构造期解析 + 运行期轮换）未落地——provider 显式收 `apiKey`，不读环境变量（与 Dart 同语义）。
+- 重试与回退共守一条流式约束：**已经交出去的增量收不回来**，故只在「尚未产出任何事件」时
+  重试或换提供商，已产出后一律上抛。退避睡眠认 ctx（Dart 的 `Future.delayed` 打断不了），
+  取消时立刻返回，不会把已放弃的请求按在原地。
 - `llm.OpenAI` 的超时只落在**自建**客户端上（`ResponseHeaderTimeout`，只包住等响应头阶段）；
   注入 `WithHTTPClient` 后 `WithTimeout` 不生效——Go 没有「只限响应头」的 client 级开关，
   本包也不去改调用方给的客户端。
